@@ -37,7 +37,7 @@ func TestTMDBProxy(t *testing.T) {
 tmdb_proxy_cache_hit 2
 # HELP tmdb_proxy_cache_total Number of times the cache was tried
 # TYPE tmdb_proxy_cache_total counter
-tmdb_proxy_cache_total 3
+tmdb_proxy_cache_total 4
 
 # HELP tmdb_proxy_cache_count Total number of cache entries (excluding expired items)
 # TYPE tmdb_proxy_cache_count gauge

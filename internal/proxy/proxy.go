@@ -33,20 +33,19 @@ func (p *TMDBProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	p.metrics.addRequest()
 	if ok {
-		p.metrics.hit()
+		p.metrics.addHit()
 	} else {
 		if resp, err = p.do(r); err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
 		if resp.StatusCode == http.StatusOK {
 			_ = p.cache.Put(key, r, resp)
 		}
 	}
-
-	p.metrics.add()
+	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
 
 	w.WriteHeader(resp.StatusCode)
 	copyHeader(w.Header(), resp.Header)

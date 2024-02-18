@@ -46,11 +46,11 @@ func newMetrics(c *Cache) *metrics {
 	}
 }
 
-func (m *metrics) add() {
+func (m *metrics) addRequest() {
 	m.total.Add(1.0)
 }
 
-func (m *metrics) hit() {
+func (m *metrics) addHit() {
 	m.hits.Add(1.0)
 }
 
