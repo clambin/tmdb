@@ -59,6 +59,21 @@ func (c Client) SearchPersonPage(ctx context.Context, query string, page int) ([
 	return result.Results, result.TotalPages, nil
 }
 
+func (c Client) SearchPersonAllPages(ctx context.Context, query string) ([]Person, error) {
+	var allPersons []Person
+	page := 1
+	for {
+		result, totalPages, err := c.SearchPersonPage(ctx, query, page)
+		if err == nil {
+			allPersons = append(allPersons, result...)
+		}
+
+		if err != nil || page == totalPages {
+			return allPersons, err
+		}
+	}
+}
+
 func (c Client) GetPerson(ctx context.Context, id int) (Person, error) {
 	return call[Person](ctx, c, c.BaseURL+"/3/person/"+strconv.Itoa(id), url.Values{})
 }

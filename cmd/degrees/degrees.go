@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/clambin/tmdb/internal/degrees"
-	"github.com/clambin/tmdb/internal/tmdb"
+	"github.com/clambin/tmdb/pkg/tmdb"
 	"log/slog"
 	"net/http"
 	"os"
