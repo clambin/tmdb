@@ -1,7 +1,7 @@
 package degrees
 
 import (
-	"github.com/clambin/tmdb/internal/tmdb"
+	"github.com/clambin/tmdb/pkg/tmdb"
 	"strconv"
 )
 

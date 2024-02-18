@@ -3,7 +3,7 @@ package degrees
 import (
 	"context"
 	"github.com/clambin/go-common/set"
-	"github.com/clambin/tmdb/internal/tmdb"
+	"github.com/clambin/tmdb/pkg/tmdb"
 	"slices"
 )
 

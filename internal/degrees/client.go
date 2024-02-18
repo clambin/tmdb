@@ -2,7 +2,7 @@ package degrees
 
 import (
 	"context"
-	"github.com/clambin/tmdb/internal/tmdb"
+	"github.com/clambin/tmdb/pkg/tmdb"
 	"log/slog"
 )
 

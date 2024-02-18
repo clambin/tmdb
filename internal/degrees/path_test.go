@@ -2,7 +2,7 @@ package degrees_test
 
 import (
 	"github.com/clambin/tmdb/internal/degrees"
-	"github.com/clambin/tmdb/internal/tmdb"
+	"github.com/clambin/tmdb/pkg/tmdb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

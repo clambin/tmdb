@@ -4,6 +4,7 @@ on:
   push:
     branches-ignore:
       - main
+      - docker
   pull_request_target:
 
 jobs:

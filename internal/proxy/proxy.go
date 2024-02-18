@@ -17,11 +17,12 @@ type TMDBProxy struct {
 }
 
 func New(expiry, cleanupInterval time.Duration) *TMDBProxy {
+	c := newCache(expiry, cleanupInterval)
 	return &TMDBProxy{
 		HTTPClient: http.DefaultClient,
 		TargetHost: "https://api.themoviedb.org",
-		cache:      newCache(expiry, cleanupInterval),
-		metrics:    newMetrics(),
+		cache:      c,
+		metrics:    newMetrics(c),
 	}
 }
 
