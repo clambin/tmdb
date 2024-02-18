@@ -2,6 +2,7 @@ package degrees_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/clambin/go-common/set"
 	"github.com/clambin/tmdb/internal/degrees"
@@ -83,6 +84,39 @@ func TestClient_Degrees(t *testing.T) {
 			fromID:   1,
 			toID:     4,
 			maxDepth: 2,
+			want:     []string{},
+		},
+		{
+			name: "GetPerson fails",
+			setup: func(ctx context.Context, getter *mocks.TMDBClient) {
+				getter.EXPECT().GetPerson(ctx, 1).Return(tmdb.Person{}, errors.New("failed")).Once()
+			},
+			fromID:   1,
+			toID:     4,
+			maxDepth: 2,
+			want:     []string{},
+		},
+		{
+			name: "GetPersonCredits fails",
+			setup: func(ctx context.Context, getter *mocks.TMDBClient) {
+				getter.EXPECT().GetPerson(ctx, 1).Return(makePerson(1), nil).Once()
+				getter.EXPECT().GetPersonCredits(ctx, 1).Return(tmdb.PersonCredits{}, errors.New("failed")).Once()
+			},
+			fromID:   1,
+			toID:     4,
+			maxDepth: 2,
+			want:     []string{},
+		},
+		{
+			name: "GetMovieCredits fails",
+			setup: func(ctx context.Context, getter *mocks.TMDBClient) {
+				getter.EXPECT().GetPerson(ctx, 1).Return(makePerson(1), nil).Once()
+				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil).Once()
+				getter.EXPECT().GetMovieCredits(ctx, 1).Return(tmdb.MovieCredits{}, errors.New("failed")).Once()
+			},
+			fromID:   1,
+			toID:     4,
+			maxDepth: 4,
 			want:     []string{},
 		},
 	}
