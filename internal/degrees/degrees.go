@@ -18,9 +18,7 @@ func (c *Client) Degrees(ctx context.Context, fromActorID, toActorID int, maxDep
 
 func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, toActorID int, maxDepth int, path Path, examinedActorIDs set.Set[int], examinedMovieIDs set.Set[int]) {
 	c.logger.Debug("findActor", "from", fromActorID, "to", toActorID, "maxDepth", maxDepth, "path", path)
-	if maxDepth == 0 {
-		return
-	}
+
 	actor, err := c.GetPerson(ctx, fromActorID)
 	if err != nil {
 		c.logger.Warn("tmdb call failed", "err", err, "call", "GetPerson")
@@ -38,13 +36,13 @@ func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, t
 			continue
 		}
 
+		newExaminedMovieIDs := examinedMovieIDs.Copy()
+		newExaminedMovieIDs.Add(movieID)
+
 		newPath := append(path, Link{
 			Person: tmdb.Person{Id: fromActorID, Name: actor.Name},
 			Movie:  Movie{ID: movieID, Name: fromActorMovies.movieNames[movieID]},
 		})
-
-		newExaminedMovieIDs := examinedMovieIDs.Copy()
-		newExaminedMovieIDs.Add(movieID)
 
 		credits, err := c.GetMovieCredits(ctx, movieID)
 		if err != nil {
@@ -58,7 +56,9 @@ func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, t
 			}
 			if a.Id == toActorID {
 				c.reportPath(ctx, ch, newPath, tmdb.Person{Id: a.Id, Name: a.Name})
-			} else {
+				continue
+			}
+			if maxDepth > 1 {
 				newExaminedActorIDs := examinedActorIDs.Copy()
 				newExaminedActorIDs.Add(a.Id)
 				c.findActor(ctx, ch, a.Id, toActorID, maxDepth-1, newPath, newExaminedActorIDs, newExaminedMovieIDs)
