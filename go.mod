@@ -4,7 +4,6 @@ go 1.22
 
 require (
 	github.com/clambin/go-common/cache v0.2.2
-	github.com/clambin/go-common/httpclient v0.6.0
 	github.com/clambin/go-common/httpserver v0.12.0
 	github.com/clambin/go-common/set v0.4.2
 	github.com/prometheus/client_golang v1.18.0

@@ -9,58 +9,28 @@ import (
 var _ http.RoundTripper = &RoundTripper{}
 var _ prometheus.Collector = &RoundTripper{}
 
-var (
-	cacheAttempts = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace:   "tmdb",
-		Subsystem:   "proxy",
-		Name:        "cache_total",
-		Help:        "Number of times the cache was tried",
-		ConstLabels: nil,
-	})
-	cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace:   "tmdb",
-		Subsystem:   "proxy",
-		Name:        "cache_hit",
-		Help:        "Number of times the cache was used",
-		ConstLabels: nil,
-	})
-	cacheSize = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace:   "tmdb",
-		Subsystem:   "proxy",
-		Name:        "cache_size",
-		Help:        "Total number of cache entries (excluding expired items)",
-		ConstLabels: nil,
-	})
-	cacheTotalSize = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace:   "tmdb",
-		Subsystem:   "proxy",
-		Name:        "cache_total_size",
-		Help:        "Total number of cache entries (including expired items)",
-		ConstLabels: nil,
-	})
-)
-
 type RoundTripper struct {
-	cache *ResponseCache
-	next  http.RoundTripper
+	cache   *ResponseCache
+	metrics *metrics
+	next    http.RoundTripper
 }
 
 func NewRoundTripper(expiry, cleanup time.Duration, rt http.RoundTripper) *RoundTripper {
 	return &RoundTripper{
-		cache: NewResponseCache(expiry, cleanup),
-		next:  rt,
+		cache:   NewResponseCache(expiry, cleanup),
+		metrics: newMetrics(),
+		next:    rt,
 	}
 }
 
 func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	cacheAttempts.Inc()
+	r.metrics.cacheAttempts.Inc()
 	cacheKey, resp, found, err := r.cache.Get(req)
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		cacheHits.Inc()
-		return resp, nil
+	if err != nil || found {
+		if found {
+			r.metrics.cacheHits.Inc()
+		}
+		return resp, err
 	}
 
 	if resp, err = r.next.RoundTrip(req); err == nil {
@@ -71,18 +41,18 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (r *RoundTripper) Describe(ch chan<- *prometheus.Desc) {
-	cacheHits.Describe(ch)
-	cacheAttempts.Describe(ch)
-	cacheSize.Describe(ch)
-	cacheTotalSize.Describe(ch)
+	r.metrics.cacheHits.Describe(ch)
+	r.metrics.cacheAttempts.Describe(ch)
+	r.metrics.cacheSize.Describe(ch)
+	r.metrics.cacheTotalSize.Describe(ch)
 }
 
 func (r *RoundTripper) Collect(ch chan<- prometheus.Metric) {
-	cacheSize.Set(float64(r.cache.cache.Len()))
-	cacheTotalSize.Set(float64(r.cache.cache.Size()))
+	r.metrics.cacheSize.Set(float64(r.cache.cache.Len()))
+	r.metrics.cacheTotalSize.Set(float64(r.cache.cache.Size()))
 
-	cacheAttempts.Collect(ch)
-	cacheHits.Collect(ch)
-	cacheSize.Collect(ch)
-	cacheTotalSize.Collect(ch)
+	r.metrics.cacheAttempts.Collect(ch)
+	r.metrics.cacheHits.Collect(ch)
+	r.metrics.cacheSize.Collect(ch)
+	r.metrics.cacheTotalSize.Collect(ch)
 }

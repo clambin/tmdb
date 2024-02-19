@@ -26,7 +26,11 @@ func New(expiry, cleanupInterval time.Duration) *TMDBProxy {
 }
 
 func (p *TMDBProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	req, _ := http.NewRequestWithContext(r.Context(), r.Method, p.TargetHost+r.URL.EscapedPath(), nil)
+	target := p.TargetHost + r.URL.Path
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	req, _ := http.NewRequestWithContext(r.Context(), r.Method, target, nil)
 	copyHeader(req.Header, r.Header)
 	// TODO: this prevents compression
 	// for some reason http.ReadResponse returns the compressed body, and then the end client can't read the body.
