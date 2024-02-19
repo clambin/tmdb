@@ -18,6 +18,7 @@ type TMDBClient interface {
 	GetPerson(ctx context.Context, id int) (tmdb.Person, error)
 	GetMovie(ctx context.Context, id int) (tmdb.Movie, error)
 	GetMovieCredits(ctx context.Context, id int) (tmdb.MovieCredits, error)
+	SearchPersonAllPages(ctx context.Context, query string) ([]tmdb.Person, error)
 }
 
 var _ TMDBClient = tmdb.Client{}

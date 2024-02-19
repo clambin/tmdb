@@ -4,7 +4,7 @@ on:
   push:
     branches-ignore:
       - main
-      - docker
+      - fix-memleak
   pull_request_target:
 
 jobs:

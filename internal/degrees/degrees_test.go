@@ -222,6 +222,10 @@ type benchClient struct {
 	movieCredits  map[int]tmdb2.MovieCredits
 }
 
+func (b benchClient) SearchPersonAllPages(_ context.Context, _ string) ([]tmdb2.Person, error) {
+	panic("implement me")
+}
+
 func (b benchClient) GetPersonCredits(_ context.Context, id int) (tmdb2.PersonCredits, error) {
 	if credits, ok := b.personCredits[id]; ok {
 		return credits, nil

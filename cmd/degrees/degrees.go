@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/clambin/tmdb/internal/degrees"
@@ -16,46 +15,58 @@ import (
 var (
 	authKey = flag.String("authkey", "", "TMDB API authentication key")
 	proxy   = flag.String("proxy", "", "Use TMDB Proxy")
+	id      = flag.Bool("id", false, "Don't look up actor names, use ID directly")
+	depth   = flag.Int("depth", 2, "Maximum depth (2 finds common movies")
 )
 
 func main() {
-	from, to, err := getArgs()
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err.Error())
-	}
-	tmdbClient := tmdb.New(*authKey, http.DefaultClient)
-	if *proxy != "" {
-		tmdbClient.BaseURL = *proxy
-	}
-
-	c := degrees.New(tmdbClient, slog.Default())
-
-	for path := range c.Degrees(context.Background(), from, to, 4) {
-		fmt.Println(path.String())
-	}
-}
-
-func getArgs() (int, int, error) {
 	flag.Parse()
 	if *authKey == "" {
 		*authKey = os.Getenv("TMDB_AUTHKEY")
 		if *authKey == "" {
-			return 0, 0, errors.New("no TMDB authentication key provided")
+			panic("no TMDB authentication key provided")
 		}
 	}
+
+	tmdbClient := tmdb.New(*authKey, http.DefaultClient)
+	if *proxy != "" {
+		tmdbClient.BaseURL = *proxy
+	}
+	c := degrees.New(tmdbClient, slog.Default())
+
+	from, to, err := getArgs(c)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err.Error())
+	}
+
+	for path := range c.Degrees(context.Background(), from, to, *depth) {
+		fmt.Println(path.String())
+	}
+}
+
+func getArgs(c *degrees.Client) (int, int, error) {
 	var from, to int
 	var err error
 	for i, arg := range flag.Args() {
+		var actorID int
+		if actorID, err = getActor(c, arg); err != nil {
+			return 0, 0, fmt.Errorf("invalid actor %s: %w", arg, err)
+		}
 		if i == 0 {
-			if from, err = strconv.Atoi(arg); err != nil {
-				return 0, 0, fmt.Errorf("invalid from id: %w", err)
-			}
+			from = actorID
 		}
 		if i == 1 {
-			if to, err = strconv.Atoi(arg); err != nil {
-				return 0, 0, fmt.Errorf("invalid to id: %w", err)
-			}
+			to = actorID
 		}
+
 	}
 	return from, to, err
+}
+
+func getActor(c *degrees.Client, query string) (int, error) {
+	if *id {
+		return strconv.Atoi(query)
+	}
+	actor, err := c.FindActor(context.Background(), query)
+	return actor.Id, err
 }
