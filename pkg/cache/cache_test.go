@@ -12,29 +12,61 @@ import (
 )
 
 func TestResponseCache(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{
+			name:   "simple",
+			method: http.MethodGet,
+			path:   "/foo",
+			body:   "a simple GET",
+		},
+		{
+			name:   "method",
+			method: http.MethodPost,
+			path:   "/foo",
+			body:   "a simple POST",
+		},
+		{
+			name:   "with query",
+			method: http.MethodGet,
+			path:   "/foo?bar=snafu",
+			body:   "GET with query",
+		},
+	}
+
 	c := cache.NewResponseCache(time.Hour, time.Hour)
 
-	req, _ := http.NewRequest(http.MethodGet, "/", bytes.NewBufferString("this is a request"))
-	key, resp, ok, err := c.Get(req)
-	require.NoError(t, err)
-	assert.False(t, ok)
+	for _, tt := range tests {
+		req, _ := http.NewRequest(tt.method, tt.path, nil)
+		key, _, ok, err := c.Get(req)
+		require.NoError(t, err)
+		require.False(t, ok)
 
-	resp = &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(bytes.NewBufferString("this is a response")),
-		Request:    req,
+		assert.NoError(t, c.Put(key, nil, &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(tt.body)),
+		}))
 	}
-	err = c.Put(key, req, resp)
-	assert.NoError(t, err)
 
-	key, resp, ok, err = c.Get(req)
-	require.NoError(t, err)
-	assert.True(t, ok)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	defer func() { _ = resp.Body.Close() }()
+			req, _ := http.NewRequest(tt.method, tt.path, nil)
+			_, resp, ok, err := c.Get(req)
+			require.NoError(t, err)
+			require.True(t, ok)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, tt.body, string(body))
+			require.NoError(t, resp.Body.Close())
 
-	body, _ := io.ReadAll(resp.Body)
-	assert.Equal(t, "this is a response", string(body))
+		})
+	}
 }
 
 func BenchmarkCachePut(b *testing.B) {

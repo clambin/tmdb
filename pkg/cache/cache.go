@@ -17,7 +17,7 @@ type ResponseCache struct {
 func NewResponseCache(expiration, cleanup time.Duration) *ResponseCache {
 	return &ResponseCache{
 		cache:  cache.New[string, []byte](expiration, cleanup),
-		GetKey: func(r *http.Request) string { return r.Method + "|" + r.URL.Path },
+		GetKey: func(r *http.Request) string { return r.Method + "|" + r.URL.String() },
 	}
 }
 

@@ -15,11 +15,14 @@ type RoundTripper struct {
 	next    http.RoundTripper
 }
 
-func NewRoundTripper(expiry, cleanup time.Duration, rt http.RoundTripper) *RoundTripper {
+func NewRoundTripper(expiry, cleanup time.Duration, next http.RoundTripper) *RoundTripper {
+	if next == nil {
+		next = http.DefaultTransport
+	}
 	return &RoundTripper{
 		cache:   NewResponseCache(expiry, cleanup),
 		metrics: newMetrics(),
-		next:    rt,
+		next:    next,
 	}
 }
 

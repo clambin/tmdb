@@ -41,11 +41,11 @@ func (p *TMDBProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cache problem", http.StatusBadGateway)
 		return
 	}
-	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
 
 	w.WriteHeader(resp.StatusCode)
 	copyHeader(w.Header(), resp.Header)
 	_, _ = io.Copy(w, resp.Body)
+	_ = resp.Body.Close()
 }
 
 func copyHeader(dst, src http.Header) {
