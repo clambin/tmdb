@@ -31,11 +31,9 @@ func TestClient_Degrees(t *testing.T) {
 				getter.EXPECT().GetPerson(ctx, 1).Return(makePerson(1), nil).Once()
 				getter.EXPECT().GetPerson(ctx, 2).Return(makePerson(2), nil).Once()
 				getter.EXPECT().GetPerson(ctx, 3).Return(makePerson(3), nil).Once()
-
 				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil).Once()
 				getter.EXPECT().GetPersonCredits(ctx, 2).Return(makePersonCredits(2, 1, 2), nil).Once()
 				getter.EXPECT().GetPersonCredits(ctx, 3).Return(makePersonCredits(3, 2, 3, 4), nil).Once()
-
 				getter.EXPECT().GetMovieCredits(ctx, 1).Return(makeMovieCredits(1, 1, 2), nil).Once()
 				getter.EXPECT().GetMovieCredits(ctx, 2).Return(makeMovieCredits(2, 2, 3), nil).Once()
 				getter.EXPECT().GetMovieCredits(ctx, 3).Return(makeMovieCredits(3, 3, 4), nil).Once()
@@ -43,10 +41,10 @@ func TestClient_Degrees(t *testing.T) {
 			},
 			fromID:   1,
 			toID:     4,
-			maxDepth: 4,
+			maxDepth: 3,
 			want: []string{
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie3 -> actor4 (4)",
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie4 -> actor4 (4)",
+				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie3 -> actor4 (3)",
+				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie4 -> actor4 (3)",
 			},
 		},
 		{
@@ -54,24 +52,16 @@ func TestClient_Degrees(t *testing.T) {
 			setup: func(ctx context.Context, getter *mocks.TMDBClient) {
 				getter.EXPECT().GetPerson(ctx, 1).Return(makePerson(1), nil).Once()
 				getter.EXPECT().GetPerson(ctx, 2).Return(makePerson(2), nil).Once()
-				getter.EXPECT().GetPerson(ctx, 3).Return(makePerson(3), nil).Once()
-
 				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil).Once()
 				getter.EXPECT().GetPersonCredits(ctx, 2).Return(makePersonCredits(2, 1, 2), nil).Once()
-				getter.EXPECT().GetPersonCredits(ctx, 3).Return(makePersonCredits(3, 2, 3, 4), nil).Once()
-
 				getter.EXPECT().GetMovieCredits(ctx, 1).Return(makeMovieCredits(1, 1, 2), nil).Once()
 				getter.EXPECT().GetMovieCredits(ctx, 2).Return(makeMovieCredits(2, 2, 3, 4), nil).Once()
-				getter.EXPECT().GetMovieCredits(ctx, 3).Return(makeMovieCredits(3, 3, 4), nil).Once()
-				getter.EXPECT().GetMovieCredits(ctx, 4).Return(makeMovieCredits(4, 3, 4), nil).Once()
 			},
 			fromID:   1,
 			toID:     4,
-			maxDepth: 4,
+			maxDepth: 3,
 			want: []string{
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie3 -> actor4 (4)",
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie4 -> actor4 (4)",
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor4 (3)",
+				"actor1 -> movie1 -> actor2 -> movie2 -> actor4 (2)",
 			},
 		},
 		{
@@ -83,7 +73,7 @@ func TestClient_Degrees(t *testing.T) {
 			},
 			fromID:   1,
 			toID:     4,
-			maxDepth: 2,
+			maxDepth: 1,
 			want:     []string{},
 		},
 		{
@@ -93,7 +83,7 @@ func TestClient_Degrees(t *testing.T) {
 			},
 			fromID:   1,
 			toID:     4,
-			maxDepth: 2,
+			maxDepth: 1,
 			want:     []string{},
 		},
 		{
@@ -104,7 +94,7 @@ func TestClient_Degrees(t *testing.T) {
 			},
 			fromID:   1,
 			toID:     4,
-			maxDepth: 2,
+			maxDepth: 1,
 			want:     []string{},
 		},
 		{
@@ -116,7 +106,7 @@ func TestClient_Degrees(t *testing.T) {
 			},
 			fromID:   1,
 			toID:     4,
-			maxDepth: 4,
+			maxDepth: 3,
 			want:     []string{},
 		},
 	}
@@ -181,7 +171,7 @@ func BenchmarkClient_Degrees(b *testing.B) {
 	bc := newBenchClient()
 	for range b.N {
 		c := degrees.New(bc, l)
-		for range c.Degrees(ctx, 1, 4, 4) {
+		for range c.Degrees(ctx, 1, 4, 3) {
 		}
 	}
 }

@@ -50,21 +50,30 @@ func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, t
 			return
 		}
 
-		for _, a := range credits.Cast {
-			if a.Id == fromActorID || examinedActorIDs.Contains(a.Id) {
-				continue
-			}
-			if a.Id == toActorID {
-				c.reportPath(ctx, ch, newPath, tmdb.Person{Id: a.Id, Name: a.Name})
-				continue
-			}
-			if maxDepth > 1 {
-				newExaminedActorIDs := examinedActorIDs.Copy()
-				newExaminedActorIDs.Add(a.Id)
-				c.findActor(ctx, ch, a.Id, toActorID, maxDepth-1, newPath, newExaminedActorIDs, newExaminedMovieIDs)
+		cast := getCastIDs(credits.Cast)
+		if name, ok := cast[toActorID]; ok {
+			c.reportPath(ctx, ch, newPath, tmdb.Person{Id: toActorID, Name: name})
+			continue
+		}
+
+		if maxDepth > 0 {
+			for _, a := range credits.Cast {
+				if a.Id != fromActorID && !examinedActorIDs.Contains(a.Id) {
+					newExaminedActorIDs := examinedActorIDs.Copy()
+					newExaminedActorIDs.Add(a.Id)
+					c.findActor(ctx, ch, a.Id, toActorID, maxDepth-1, newPath, newExaminedActorIDs, newExaminedMovieIDs)
+				}
 			}
 		}
 	}
+}
+
+func getCastIDs(cast []tmdb.MovieCastCredits) map[int]string {
+	names := make(map[int]string)
+	for _, c := range cast {
+		names[c.Id] = c.Name
+	}
+	return names
 }
 
 func (c *Client) reportPath(_ context.Context, ch chan Path, path Path, person tmdb.Person) {

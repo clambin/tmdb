@@ -16,7 +16,7 @@ var (
 	authKey = flag.String("authkey", "", "TMDB API authentication key")
 	proxy   = flag.String("proxy", "", "Use TMDB Proxy")
 	id      = flag.Bool("id", false, "Don't look up actor names, use ID directly")
-	depth   = flag.Int("depth", 2, "Maximum depth (2 finds common movies")
+	depth   = flag.Int("depth", 1, "Maximum number of movies between both actors (1 finds common movies")
 )
 
 func main() {
