@@ -21,8 +21,8 @@ func NewResponseCache(expiration, cleanup time.Duration) *ResponseCache {
 	}
 }
 
-// Get attempts to retrieve a http.Response from the cache for the request r.  On return, key will hold the key used to store the response
-// (to be passed to Put), resp will contain the cached response (if found) and ok indicates if the response was found in the cache.
+// Get attempts to retrieve a http.Response from the cache for the request r.  On return, key holds the key used to store the response
+// (to be passed to Put), resp contains the cached response (if found) and ok indicates if the response was found in the cache.
 //
 // Clients must call resp.Body.Close when finished reading resp.Body. After that call, clients can inspect resp.Trailer to find
 // key/value pairs included in the response trailer.

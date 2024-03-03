@@ -54,9 +54,7 @@ func TestCastCredit_GetTitle(t *testing.T) {
 				MediaType: tt.fields.mediaType,
 				Name:      tt.fields.name,
 			}
-			if got := c.GetTitle(); got != tt.want {
-				t.Errorf("GetTitle() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, c.GetTitle())
 		})
 	}
 }
