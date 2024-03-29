@@ -13,11 +13,11 @@ jobs:
   build:
     needs:
       - test
-    uses: clambin/workflows/.github/workflows/build.yaml@main
+    uses: clambin/workflows/.github/workflows/build.yaml@docker
     with:
-      target: tmdb-proxy
+      image: ghcr.io/clambin/tmdb-proxy
   release:
     needs:
       - build
-    uses: clambin/workflows/.github/workflows/release.yaml@main
+    uses: clambin/workflows/.github/workflows/release.yaml@docker
 
