@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"github.com/clambin/tmdb/pkg/cache"
+	"github.com/clambin/go-common/http/roundtripper"
 	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"net/http"
@@ -13,15 +13,22 @@ var _ prometheus.Collector = &TMDBProxy{}
 type TMDBProxy struct {
 	TargetHost string
 	client     *http.Client
-	rt         *cache.RoundTripper
+	roundtripper.CacheMetrics
 }
 
 func New(expiry, cleanupInterval time.Duration) *TMDBProxy {
-	rt := cache.NewRoundTripper(expiry, cleanupInterval, http.DefaultTransport)
+	cacheMetrics := newMetrics()
+	rt := roundtripper.New(roundtripper.WithCache(roundtripper.CacheOptions{
+		CacheTable:        nil,
+		DefaultExpiration: expiry,
+		CleanupInterval:   cleanupInterval,
+		GetKey:            func(r *http.Request) string { return r.Method + "|" + r.URL.String() },
+		CacheMetrics:      cacheMetrics,
+	}))
 	return &TMDBProxy{
-		TargetHost: "https://api.themoviedb.org",
-		client:     &http.Client{Transport: rt},
-		rt:         rt,
+		TargetHost:   "https://api.themoviedb.org",
+		client:       &http.Client{Transport: rt},
+		CacheMetrics: cacheMetrics,
 	}
 }
 
@@ -54,12 +61,4 @@ func copyHeader(dst, src http.Header) {
 			dst.Add(k, v)
 		}
 	}
-}
-
-func (p *TMDBProxy) Describe(ch chan<- *prometheus.Desc) {
-	p.rt.Describe(ch)
-}
-
-func (p *TMDBProxy) Collect(ch chan<- prometheus.Metric) {
-	p.rt.Collect(ch)
 }
