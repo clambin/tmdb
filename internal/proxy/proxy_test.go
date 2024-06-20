@@ -1,11 +1,14 @@
-package proxy_test
+package proxy
 
 import (
 	"bytes"
-	"github.com/clambin/tmdb/internal/proxy"
+	"context"
+	"github.com/clambin/go-common/cache"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -54,8 +57,9 @@ func TestTMDBProxy_ServeHTTP(t *testing.T) {
 			}))
 			defer s.Close()
 
-			p := proxy.New(time.Hour, time.Hour)
+			p := New(&redis.Options{}, time.Hour, slog.Default())
 			p.TargetHost = s.URL
+			p.cache.Client = &fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}
 
 			var w httptest.ResponseRecorder
 			r, _ := http.NewRequest(http.MethodGet, "http://localhost"+tt.path, nil)
@@ -71,8 +75,9 @@ func TestTMDBProxy_Collect(t *testing.T) {
 		count.Add(1)
 	}))
 
-	p := proxy.New(time.Hour, time.Hour)
+	p := New(&redis.Options{}, time.Hour, slog.Default())
 	p.TargetHost = s.URL
+	p.cache.Client = &fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}
 
 	reg := prometheus.NewPedanticRegistry()
 	reg.MustRegister(p)
@@ -100,4 +105,26 @@ tmdb_proxy_cache_hit 2
 # TYPE tmdb_proxy_cache_total counter
 tmdb_proxy_cache_total 4
 `)))
+}
+
+var _ RedisClient = &fakeRedisClient{}
+
+type fakeRedisClient struct {
+	cache *cache.Cache[string, string]
+}
+
+func (f fakeRedisClient) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) *redis.StatusCmd {
+	f.cache.AddWithExpiry(key, value.(string), ttl)
+	return redis.NewStatusCmd(ctx)
+}
+
+func (f fakeRedisClient) Get(ctx context.Context, key string) *redis.StringCmd {
+	value, ok := f.cache.Get(key)
+	cmd := redis.NewStringCmd(ctx)
+	if !ok {
+		cmd.SetErr(redis.Nil)
+	} else {
+		cmd.SetVal(value)
+	}
+	return cmd
 }

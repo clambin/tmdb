@@ -7,6 +7,7 @@ import (
 	"github.com/clambin/tmdb/internal/proxy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,23 +15,39 @@ import (
 )
 
 var (
+	debug          = flag.Bool("debug", false, "enable debug logging")
 	prometheusAddr = flag.String("metrics", ":9090", "Prometheus metric listener address")
 	proxyAddr      = flag.String("addr", ":8888", "Proxy listener addr")
-	cacheExpiry    = flag.Duration("cache", 24*time.Hour, "Time to cache tmdb data")
-	debug          = flag.Bool("debug", false, "enable debug logging")
+	cacheExpiry    = flag.Duration("cache.ttl", 24*time.Hour, "Time to cache tmdb data")
+	redisAddr      = flag.String("cache.redis.addr", "localhost:6379", "Redis address")
+	redisDB        = flag.Int("cache.redis.db", 0, "Redis database number")
+	redisUsername  = flag.String("cache.redis.username", "", "Redis username")
+	redisPassword  = flag.String("cache.redis.password", "", "Redis password")
 )
 
 func main() {
 	flag.Parse()
-
-	p := proxy.New(*cacheExpiry, time.Hour)
-	prometheus.MustRegister(p)
 
 	var opts slog.HandlerOptions
 	if *debug {
 		opts.Level = slog.LevelDebug
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &opts))
+
+	o := redis.Options{
+		Addr:     *redisAddr,
+		DB:       *redisDB,
+		Username: *redisUsername,
+		Password: *redisPassword,
+	}
+
+	logger.Info("Starting proxy", slog.Group("redis",
+		"addr", *redisAddr,
+		"db", *redisDB,
+	))
+
+	p := proxy.New(&o, *cacheExpiry, logger)
+	prometheus.MustRegister(p)
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
