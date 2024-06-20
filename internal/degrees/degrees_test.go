@@ -125,7 +125,9 @@ func TestClient_Degrees(t *testing.T) {
 
 			var count int
 			expected := set.New[string](tt.want...)
-			for path := range c.Degrees(ctx, tt.fromID, tt.toID, tt.maxDepth) {
+			ch := make(chan degrees.Path)
+			go c.Degrees(ctx, ch, tt.fromID, tt.toID, tt.maxDepth)
+			for path := range ch {
 				assert.True(t, expected.Contains(path.String()), strings.Join(expected.ListOrdered(), "|"))
 				expected.Remove(path.String())
 				count++
@@ -171,7 +173,9 @@ func BenchmarkClient_Degrees(b *testing.B) {
 	bc := newBenchClient()
 	for range b.N {
 		c := degrees.New(bc, l)
-		for range c.Degrees(ctx, 1, 4, 3) {
+		ch := make(chan degrees.Path)
+		go c.Degrees(ctx, ch, 1, 4, 3)
+		for range ch {
 		}
 	}
 }

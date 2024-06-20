@@ -7,13 +7,9 @@ import (
 	"slices"
 )
 
-func (c *Client) Degrees(ctx context.Context, fromActorID, toActorID int, maxDepth int) chan Path {
-	ch := make(chan Path)
-	go func() {
-		c.findActor(ctx, ch, fromActorID, toActorID, maxDepth-1, nil, nil, nil)
-		close(ch)
-	}()
-	return ch
+func (c *Client) Degrees(ctx context.Context, ch chan Path, fromActorID, toActorID int, maxDepth int) {
+	c.findActor(ctx, ch, fromActorID, toActorID, maxDepth-1, nil, nil, nil)
+	close(ch)
 }
 
 func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, toActorID int, maxDepth int, path Path, examinedActorIDs set.Set[int], examinedMovieIDs set.Set[int]) {
@@ -36,7 +32,7 @@ func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, t
 			continue
 		}
 
-		newExaminedMovieIDs := examinedMovieIDs.Copy()
+		newExaminedMovieIDs := examinedMovieIDs.Clone()
 		newExaminedMovieIDs.Add(movieID)
 
 		newPath := append(path, Link{
@@ -59,7 +55,7 @@ func (c *Client) findActor(ctx context.Context, ch chan Path, fromActorID int, t
 		if maxDepth > 0 {
 			for _, a := range credits.Cast {
 				if a.Id != fromActorID && !examinedActorIDs.Contains(a.Id) {
-					newExaminedActorIDs := examinedActorIDs.Copy()
+					newExaminedActorIDs := examinedActorIDs.Clone()
 					newExaminedActorIDs.Add(a.Id)
 					c.findActor(ctx, ch, a.Id, toActorID, maxDepth-1, newPath, newExaminedActorIDs, newExaminedMovieIDs)
 				}

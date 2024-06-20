@@ -39,7 +39,9 @@ func main() {
 		_, _ = fmt.Fprintln(os.Stderr, err.Error())
 	}
 
-	for path := range c.Degrees(context.Background(), from, to, *depth) {
+	ch := make(chan degrees.Path)
+	go c.Degrees(context.Background(), ch, from, to, *depth)
+	for path := range ch {
 		fmt.Println(path.String())
 	}
 }
