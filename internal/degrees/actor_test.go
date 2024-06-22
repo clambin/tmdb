@@ -7,7 +7,6 @@ import (
 	"github.com/clambin/tmdb/internal/degrees/mocks"
 	"github.com/clambin/tmdb/pkg/tmdb"
 	"github.com/stretchr/testify/assert"
-	"log/slog"
 	"testing"
 )
 
@@ -61,9 +60,8 @@ func TestClient_FindActor(t *testing.T) {
 			ctx := context.Background()
 			api := mocks.NewTMDBClient(t)
 			api.EXPECT().SearchPersonAllPages(ctx, tt.query).Return(tt.persons, tt.err)
-			c := degrees.New(api, slog.Default())
 
-			person, err := c.FindActor(ctx, tt.query)
+			person, err := degrees.FindActor(ctx, api, tt.query)
 			tt.wantErr(t, err)
 			assert.Equal(t, tt.wantID, person.Id)
 		})

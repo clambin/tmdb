@@ -17,20 +17,28 @@ type TMDBProxy struct {
 	TargetHost string
 	cache      Cache
 	ttl        time.Duration
-	client     *http.Client
+	httpClient *http.Client
 	roundtripper.CacheMetrics
 	logger *slog.Logger
 }
 
 func New(cfg *redis.Options, ttl time.Duration, logger *slog.Logger) *TMDBProxy {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns = 100
+	t.MaxIdleConnsPerHost = 100
+	t.MaxConnsPerHost = 100
+
 	return &TMDBProxy{
 		TargetHost: "https://api.themoviedb.org",
 		cache: Cache{
 			Namespace: "github.com/clambin/tmdb",
 			Client:    redis.NewClient(cfg),
 		},
-		ttl:          ttl,
-		client:       http.DefaultClient,
+		ttl: ttl,
+		httpClient: &http.Client{
+			Timeout:   time.Second * 10,
+			Transport: t,
+		},
 		CacheMetrics: newMetrics(),
 		logger:       logger,
 	}
@@ -74,7 +82,7 @@ func (p *TMDBProxy) call(r *http.Request) (*http.Response, error) {
 	// for some reason http.ReadResponse returns the compressed body, and then the end client can't read the body.
 	req.Header.Set("Accept-Encoding", "identity")
 
-	return p.client.Do(req)
+	return p.httpClient.Do(req)
 }
 
 func copyHeader(dst, src http.Header) {

@@ -60,6 +60,7 @@ func (c Client) SearchPersonPage(ctx context.Context, query string, page int) ([
 }
 
 func (c Client) SearchPersonAllPages(ctx context.Context, query string) ([]Person, error) {
+	// TODO: something like "will smith" can result in 500 pages!  add concurrency?
 	var allPersons []Person
 	page := 1
 	for {
@@ -71,6 +72,7 @@ func (c Client) SearchPersonAllPages(ctx context.Context, query string) ([]Perso
 		if err != nil || page == totalPages {
 			return allPersons, err
 		}
+		page++
 	}
 }
 

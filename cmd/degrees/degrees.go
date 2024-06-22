@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/clambin/go-common/http/roundtripper"
 	"github.com/clambin/tmdb/internal/degrees"
 	"github.com/clambin/tmdb/pkg/tmdb"
 	"log/slog"
@@ -13,11 +14,14 @@ import (
 )
 
 var (
+	debug   = flag.Bool("debug", false, "debug mode")
 	authKey = flag.String("authkey", "", "TMDB API authentication key")
 	proxy   = flag.String("proxy", "", "Use TMDB Proxy")
 	id      = flag.Bool("id", false, "Don't look up actor names, use ID directly")
-	depth   = flag.Int("depth", 1, "Maximum number of movies between both actors (1 finds common movies")
+	depth   = flag.Int("depth", 2, "Maximum number of movies between both actors (2 finds common movies")
 )
+
+const maxConcurrentRequests = 15
 
 func main() {
 	flag.Parse()
@@ -28,47 +32,72 @@ func main() {
 		}
 	}
 
-	tmdbClient := tmdb.New(*authKey, http.DefaultClient)
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns = 100
+	t.MaxIdleConnsPerHost = 100
+	t.MaxConnsPerHost = 100
+
+	rt := roundtripper.New(
+		roundtripper.WithLimiter(maxConcurrentRequests),
+		roundtripper.WithRoundTripper(t),
+	)
+
+	tmdbClient := tmdb.New(*authKey, &http.Client{Transport: rt})
 	if *proxy != "" {
 		tmdbClient.BaseURL = *proxy
 	}
-	c := degrees.New(tmdbClient, slog.Default())
 
-	from, to, err := getArgs(c)
+	var opts slog.HandlerOptions
+	if *debug {
+		opts.Level = slog.LevelDebug
+	}
+	l := slog.New(slog.NewTextHandler(os.Stderr, &opts))
+
+	from, to, err := getActors(tmdbClient)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err.Error())
+		return
+	}
+
+	pf := degrees.PathFinder{
+		TMDBClient: tmdbClient,
+		From:       from,
+		To:         to,
+		IncludeTV:  false,
+		Logger:     l,
 	}
 
 	ch := make(chan degrees.Path)
-	go c.Degrees(context.Background(), ch, from, to, *depth)
+	go pf.Find(context.Background(), ch, *depth)
 	for path := range ch {
 		fmt.Println(path.String())
 	}
 }
 
-func getArgs(c *degrees.Client) (int, int, error) {
-	var from, to int
-	var err error
+func getActors(c degrees.TMDBClient) (from tmdb.Person, to tmdb.Person, err error) {
+	ctx := context.Background()
 	for i, arg := range flag.Args() {
-		var actorID int
-		if actorID, err = getActor(c, arg); err != nil {
-			return 0, 0, fmt.Errorf("invalid actor %s: %w", arg, err)
+		var p tmdb.Person
+		if *id == false {
+			if p, err = degrees.FindActor(ctx, c, arg); err != nil {
+				return tmdb.Person{}, tmdb.Person{}, fmt.Errorf("invalid actor %s: %w", arg, err)
+			}
+		} else {
+			var personId int
+			if personId, err = strconv.Atoi(arg); err != nil {
+				return tmdb.Person{}, tmdb.Person{}, fmt.Errorf("invalid actor id %s: %w", arg, err)
+			}
+			if p, err = c.GetPerson(context.Background(), personId); err != nil {
+				return tmdb.Person{}, tmdb.Person{}, fmt.Errorf("invalid actor %s: %w", arg, err)
+			}
 		}
-		if i == 0 {
-			from = actorID
+		switch i {
+		case 0:
+			from = p
+		case 1:
+			to = p
+		default:
 		}
-		if i == 1 {
-			to = actorID
-		}
-
 	}
-	return from, to, err
-}
-
-func getActor(c *degrees.Client, query string) (int, error) {
-	if *id {
-		return strconv.Atoi(query)
-	}
-	actor, err := c.FindActor(context.Background(), query)
-	return actor.Id, err
+	return from, to, nil
 }

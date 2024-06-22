@@ -3,6 +3,7 @@ package degrees
 import (
 	"github.com/clambin/tmdb/pkg/tmdb"
 	"strconv"
+	"strings"
 )
 
 type Link struct {
@@ -16,23 +17,22 @@ type Movie struct {
 }
 
 func (l Link) String() string {
-	val := l.Person.Name
-	if l.Movie.ID != 0 {
-		val += " -> " + l.Movie.Name
+	if l.Movie.Name == "" {
+		return l.Person.Name
 	}
-	return val
+	return l.Movie.Name + " -> " + l.Person.Name
 }
 
 type Path []Link
 
 func (p Path) String() string {
-	var output string
+	var w strings.Builder
 	for i := range p {
 		if i > 0 {
-			output += " -> "
+			w.WriteString(" -> ")
 		}
-		output += p[i].String()
+		w.WriteString(p[i].String())
 	}
-	output += " (" + strconv.Itoa(len(p)-1) + ")"
-	return output
+	w.WriteString(" (" + strconv.Itoa(len(p)) + ")")
+	return w.String()
 }
