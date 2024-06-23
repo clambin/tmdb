@@ -92,3 +92,14 @@ func copyHeader(dst, src http.Header) {
 		}
 	}
 }
+
+func (p *TMDBProxy) Health() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := p.cache.Client.Ping(r.Context()).Err(); err != nil {
+			p.logger.Warn("failed to ping cache", "err", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+}

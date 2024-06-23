@@ -16,8 +16,9 @@ import (
 
 var (
 	debug          = flag.Bool("debug", false, "enable debug logging")
-	prometheusAddr = flag.String("metrics", ":9090", "Prometheus metric listener address")
-	proxyAddr      = flag.String("addr", ":8888", "Proxy listener addr")
+	prometheusAddr = flag.String("metrics.addr", ":9090", "Prometheus metric listener address")
+	proxyAddr      = flag.String("proxy.addr", ":8888", "Proxy addr")
+	healthAddr     = flag.String("health.addr", ":8080", "Health check addr")
 	cacheExpiry    = flag.Duration("cache.ttl", 24*time.Hour, "Time to cache tmdb data")
 	redisAddr      = flag.String("cache.redis.addr", "localhost:6379", "Redis address")
 	redisDB        = flag.Int("cache.redis.db", 0, "Redis database number")
@@ -57,11 +58,19 @@ func main() {
 		}
 	}()
 
+	go func() {
+		m := http.NewServeMux()
+		m.Handle("/readyz", p.Health())
+		healthServer := http.Server{Addr: *healthAddr, Handler: m}
+		if err := healthServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("failed to start /readyz listener", "err", err)
+		}
+	}()
+
 	s := http.Server{
 		Addr:    *proxyAddr,
 		Handler: middleware.RequestLogger(logger, slog.LevelDebug, middleware.DefaultRequestLogFormatter)(p),
 	}
-
 	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("failed to start TMDB proxy server", "err", err)
 		os.Exit(1)
