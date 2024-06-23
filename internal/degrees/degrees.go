@@ -95,8 +95,7 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 				break
 			}
 			// don't traverse actors we've already visited
-			if cast.Id == from.Id {
-				//  if f.visited(cast.Id) {
+			if f.visited(cast.Id) {
 				continue
 			}
 			p := tmdb.Person{Id: cast.Id, Name: cast.Name}
