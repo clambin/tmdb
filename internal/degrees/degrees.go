@@ -24,7 +24,6 @@ type PathFinder struct {
 	TMDBClient TMDBClient
 	From       tmdb.Person
 	To         tmdb.Person
-	IncludeTV  bool
 	Logger     *slog.Logger
 
 	maxPathLength       atomic.Int32
@@ -57,7 +56,7 @@ func (f *PathFinder) init(ctx context.Context, maxPathLength int) (err error) {
 
 func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Person, path Path) {
 	logger := f.Logger.With("path", path)
-	logger.Debug("checking actor", "actor", slog.GroupValue(slog.Int("id", from.Id), slog.String("name", from.Name)))
+	logger.Debug("checking actor", "actor", from.Name)
 
 	fromActorMovieCredits, err := f.getActorMovieCredits(ctx, from.Id)
 	if err != nil {
@@ -84,11 +83,10 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 
 	var wg sync.WaitGroup
 
-	for movieId := range fromActorMovieCredits.movieIDs {
-		logger.Debug("checking movie", "movie", fromActorMovieCredits.movieNames[movieId])
-		credits, err := f.TMDBClient.GetMovieCredits(ctx, movieId)
+	for movieID := range fromActorMovieCredits.movieIDs {
+		credits, err := f.TMDBClient.GetMovieCredits(ctx, movieID)
 		if err != nil {
-			logger.Error("failed to get movie credits", "err", err)
+			logger.Error("failed to get movie credits", "id", movieID, "err", err)
 			return
 		}
 		for _, cast := range credits.Cast {
@@ -97,7 +95,8 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 				break
 			}
 			// don't traverse actors we've already visited
-			if /*cast.Id == from.Id || */ f.visited(cast.Id) {
+			if cast.Id == from.Id {
+				//  if f.visited(cast.Id) {
 				continue
 			}
 			p := tmdb.Person{Id: cast.Id, Name: cast.Name}
@@ -137,7 +136,7 @@ func (f *PathFinder) getActorMovieCredits(ctx context.Context, id int) (actorMov
 	cr, err := f.TMDBClient.GetPersonCredits(ctx, id)
 	if err == nil {
 		for _, credit := range cr.Cast {
-			if credit.MediaType == "movie" || f.IncludeTV {
+			if credit.MediaType == "movie" {
 				result.movieIDs.Add(credit.Id)
 				result.movieNames[credit.Id] = credit.GetTitle()
 			}

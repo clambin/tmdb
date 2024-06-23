@@ -63,7 +63,6 @@ func main() {
 		TMDBClient: tmdbClient,
 		From:       from,
 		To:         to,
-		IncludeTV:  false,
 		Logger:     l,
 	}
 

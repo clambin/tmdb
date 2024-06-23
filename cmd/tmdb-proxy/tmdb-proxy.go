@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	version        = "change-me"
 	debug          = flag.Bool("debug", false, "enable debug logging")
 	prometheusAddr = flag.String("metrics.addr", ":9090", "Prometheus metric listener address")
 	proxyAddr      = flag.String("proxy.addr", ":8888", "Proxy addr")
@@ -42,10 +43,10 @@ func main() {
 		Password: *redisPassword,
 	}
 
-	logger.Info("Starting proxy", slog.Group("redis",
-		"addr", *redisAddr,
-		"db", *redisDB,
-	))
+	logger.Info("Starting proxy",
+		"version", version,
+		slog.Group("redis", "addr", *redisAddr, "db", *redisDB),
+	)
 
 	p := proxy.New(&o, *cacheExpiry, logger)
 	prometheus.MustRegister(p)
