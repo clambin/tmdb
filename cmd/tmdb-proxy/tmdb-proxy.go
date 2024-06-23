@@ -3,11 +3,13 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"github.com/clambin/go-common/http/middleware"
 	"github.com/clambin/tmdb/internal/proxy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 	"log/slog"
 	"net/http"
 	"os"
@@ -50,29 +52,34 @@ func main() {
 
 	p := proxy.New(&o, *cacheExpiry, logger)
 	prometheus.MustRegister(p)
+	requestLogger := middleware.RequestLogger(logger, slog.LevelDebug, middleware.DefaultRequestLogFormatter)
 
-	go func() {
+	var g errgroup.Group
+	g.Go(func() error {
 		http.Handle("/metrics", promhttp.Handler())
 		if err := http.ListenAndServe(*prometheusAddr, nil); !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("failed to start Prometheus metrics server", "err", err)
-			os.Exit(1)
+			return fmt.Errorf("prometheus server error: %w", err)
 		}
-	}()
-
-	go func() {
+		return nil
+	})
+	g.Go(func() error {
 		m := http.NewServeMux()
 		m.Handle("/readyz", p.Health())
-		healthServer := http.Server{Addr: *healthAddr, Handler: m}
+		healthServer := http.Server{Addr: *healthAddr, Handler: requestLogger(m)}
 		if err := healthServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("failed to start /readyz listener", "err", err)
+			return fmt.Errorf("health server error: %w", err)
 		}
-	}()
+		return nil
+	})
+	g.Go(func() error {
+		s := http.Server{Addr: *proxyAddr, Handler: requestLogger(p)}
+		if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("proxy server error: %w", err)
+		}
+		return nil
+	})
 
-	s := http.Server{
-		Addr:    *proxyAddr,
-		Handler: middleware.RequestLogger(logger, slog.LevelDebug, middleware.DefaultRequestLogFormatter)(p),
-	}
-	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	if err := g.Wait(); err != nil {
 		slog.Error("failed to start TMDB proxy server", "err", err)
 		os.Exit(1)
 	}
