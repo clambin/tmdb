@@ -18,14 +18,14 @@ func newMetrics() *metrics {
 		cacheAttempts: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   "tmdb",
 			Subsystem:   "proxy",
-			Name:        "cache_total",
+			Name:        "cache_total_count",
 			Help:        "Number of times the cache was tried",
 			ConstLabels: nil,
 		}),
 		cacheHits: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   "tmdb",
 			Subsystem:   "proxy",
-			Name:        "cache_hit",
+			Name:        "cache_hit_count",
 			Help:        "Number of times the cache was used",
 			ConstLabels: nil,
 		}),

@@ -98,13 +98,13 @@ func TestTMDBProxy_Collect(t *testing.T) {
 	assert.Equal(t, http.StatusBadGateway, w.Code)
 
 	assert.NoError(t, testutil.GatherAndCompare(reg, bytes.NewBufferString(`
-# HELP tmdb_proxy_cache_hit Number of times the cache was used
-# TYPE tmdb_proxy_cache_hit counter
-tmdb_proxy_cache_hit 2
+# HELP tmdb_proxy_cache_hit_count Number of times the cache was used
+# TYPE tmdb_proxy_cache_hit_count counter
+tmdb_proxy_cache_hit_count 2
 
-# HELP tmdb_proxy_cache_total Number of times the cache was tried
-# TYPE tmdb_proxy_cache_total counter
-tmdb_proxy_cache_total 4
+# HELP tmdb_proxy_cache_total_count Number of times the cache was tried
+# TYPE tmdb_proxy_cache_total_count counter
+tmdb_proxy_cache_total_count 4
 `)))
 }
 
