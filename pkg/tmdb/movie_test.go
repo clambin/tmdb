@@ -41,6 +41,6 @@ func TestClient_GetMovieCredits(t *testing.T) {
 	assert.NotEmpty(t, credits.Cast)
 
 	s.Close()
-	_, err = c.GetPersonCredits(ctx, 31)
+	_, err = c.GetMovieCredits(ctx, 680)
 	assert.Error(t, err)
 }

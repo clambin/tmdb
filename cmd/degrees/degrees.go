@@ -18,7 +18,7 @@ var (
 	authKey = flag.String("authkey", "", "TMDB API authentication key")
 	proxy   = flag.String("proxy", "", "Use TMDB Proxy")
 	id      = flag.Bool("id", false, "Don't look up actor names, use ID directly")
-	depth   = flag.Int("depth", 2, "Maximum number of movies between both actors (2 finds common movies")
+	depth   = flag.Int("depth", 1, "Maximum number of movies between both actors (1 finds common movies")
 )
 
 const maxConcurrentRequests = 15
@@ -64,10 +64,11 @@ func main() {
 		From:       from,
 		To:         to,
 		Logger:     l,
+		Mode:       degrees.ModeMovies | degrees.ModeTVSeries,
 	}
 
 	var found bool
-	for d := 2; !found && d <= *depth; d++ {
+	for d := 1; !found && d <= *depth; d++ {
 		l.Debug("trying depth " + strconv.Itoa(d))
 		ch := make(chan degrees.Path)
 		go pf.Find(context.Background(), ch, d)

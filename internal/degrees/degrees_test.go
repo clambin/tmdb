@@ -15,12 +15,12 @@ import (
 
 func TestClient_Degrees(t *testing.T) {
 	tests := []struct {
-		name     string
-		setup    func(context.Context, *mocks.TMDBClient)
-		fromID   int
-		toID     int
-		maxDepth int
-		want     []string
+		name   string
+		setup  func(context.Context, *mocks.TMDBClient)
+		fromID int
+		toID   int
+		depth  int
+		want   []string
 	}{
 		{
 			name: "common movie",
@@ -28,11 +28,11 @@ func TestClient_Degrees(t *testing.T) {
 				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil) //.Once()
 				getter.EXPECT().GetPersonCredits(ctx, 2).Return(makePersonCredits(2, 1), nil) //.Once()
 			},
-			fromID:   1,
-			toID:     2,
-			maxDepth: 2,
+			fromID: 1,
+			toID:   2,
+			depth:  1,
 			want: []string{
-				"actor1 -> movie1 -> actor2 (2)",
+				"actor1 -> movie1 -> actor2 (1)",
 			},
 		},
 		{
@@ -45,12 +45,12 @@ func TestClient_Degrees(t *testing.T) {
 				getter.EXPECT().GetMovieCredits(ctx, 1).Return(makeMovieCredits(1, 1, 2), nil)      //.Once()
 				getter.EXPECT().GetMovieCredits(ctx, 2).Return(makeMovieCredits(2, 2, 3), nil)      //.Once()
 			},
-			fromID:   1,
-			toID:     4,
-			maxDepth: 4,
+			fromID: 1,
+			toID:   4,
+			depth:  3,
 			want: []string{
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie3 -> actor4 (4)",
-				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie4 -> actor4 (4)",
+				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie3 -> actor4 (3)",
+				"actor1 -> movie1 -> actor2 -> movie2 -> actor3 -> movie4 -> actor4 (3)",
 			},
 		},
 		{
@@ -59,32 +59,32 @@ func TestClient_Degrees(t *testing.T) {
 				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil) //.Once()
 				getter.EXPECT().GetPersonCredits(ctx, 4).Return(makePersonCredits(4, 4), nil)
 			},
-			fromID:   1,
-			toID:     4,
-			maxDepth: 1,
-			want:     []string{},
+			fromID: 1,
+			toID:   4,
+			depth:  1,
+			want:   []string{},
 		},
 		{
 			name: "GetPersonCredits fails",
 			setup: func(ctx context.Context, getter *mocks.TMDBClient) {
 				getter.EXPECT().GetPersonCredits(ctx, 4).Return(tmdb.PersonCredits{}, errors.New("failed")) //.Once()
 			},
-			fromID:   1,
-			toID:     4,
-			maxDepth: 1,
-			want:     []string{},
+			fromID: 1,
+			toID:   4,
+			depth:  1,
+			want:   []string{},
 		},
 		{
 			name: "GetMovieCredits fails",
 			setup: func(ctx context.Context, getter *mocks.TMDBClient) {
-				getter.EXPECT().GetPersonCredits(ctx, 4).Return(makePersonCredits(4, 4), nil)
-				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil)             //.Once()
+				getter.EXPECT().GetPersonCredits(ctx, 1).Return(makePersonCredits(1, 1), nil) //.Once()
+				getter.EXPECT().GetPersonCredits(ctx, 2).Return(makePersonCredits(2, 2), nil)
 				getter.EXPECT().GetMovieCredits(ctx, 1).Return(tmdb.MovieCredits{}, errors.New("failed")) //.Once()
 			},
-			fromID:   1,
-			toID:     4,
-			maxDepth: 3,
-			want:     []string{},
+			fromID: 1,
+			toID:   2,
+			depth:  3,
+			want:   []string{},
 		},
 	}
 
@@ -104,12 +104,13 @@ func TestClient_Degrees(t *testing.T) {
 				TMDBClient: getter,
 				From:       makePerson(tt.fromID),
 				To:         makePerson(tt.toID),
+				Mode:       degrees.ModeMovies,
 				Logger:     l,
 			}
-			go f.Find(ctx, ch, tt.maxDepth)
+			go f.Find(ctx, ch, tt.depth)
 			var count int
 			for path := range ch {
-				t.Log(path.String())
+				//t.Log(path.String())
 				assert.Contains(t, tt.want, path.String())
 				count++
 			}

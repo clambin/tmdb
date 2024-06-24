@@ -2,7 +2,6 @@ package degrees
 
 import (
 	"context"
-	"github.com/clambin/go-common/set"
 	"github.com/clambin/tmdb/pkg/tmdb"
 	"log/slog"
 	"sync"
@@ -10,36 +9,40 @@ import (
 )
 
 type TMDBClient interface {
-	GetPersonCredits(ctx context.Context, id int) (tmdb.PersonCredits, error)
 	SearchPersonPage(ctx context.Context, query string, page int) ([]tmdb.Person, int, error)
-	GetPerson(ctx context.Context, id int) (tmdb.Person, error)
-	GetMovie(ctx context.Context, id int) (tmdb.Movie, error)
-	GetMovieCredits(ctx context.Context, id int) (tmdb.MovieCredits, error)
 	SearchPersonAllPages(ctx context.Context, query string) ([]tmdb.Person, error)
+	GetPerson(ctx context.Context, id int) (tmdb.Person, error)
+	GetPersonCredits(ctx context.Context, id int) (tmdb.PersonCredits, error)
+	GetMovieCredits(ctx context.Context, id int) (tmdb.MovieCredits, error)
+	GetTVSeriesCredits(ctx context.Context, id int) (tmdb.TVSeriesCredits, error)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+type Mode int
+
+const (
+	ModeMovies   Mode = 0x1
+	ModeTVSeries Mode = 0x2
+)
 
 type PathFinder struct {
 	TMDBClient TMDBClient
 	From       tmdb.Person
 	To         tmdb.Person
 	Logger     *slog.Logger
+	Mode       Mode
 
-	maxPathLength       atomic.Int32
-	toActorMovieCredits actorMovieCredits
-	lock                sync.RWMutex
-	visitedActors       set.Set[int]
+	maxPathLength          atomic.Int32
+	toActorMovieCredits    actorCredits
+	toActorTVSeriesCredits actorCredits
+	lock                   sync.RWMutex
+	visitedActors          map[int]struct{}
 }
 
-type actorMovieCredits struct {
-	movieIDs   set.Set[int]
-	movieNames map[int]string
-}
-
-func (f *PathFinder) Find(ctx context.Context, ch chan Path, maxPathLength int) {
+func (f *PathFinder) Find(ctx context.Context, ch chan Path, depth int) {
 	defer close(ch)
-	if err := f.init(ctx, maxPathLength); err != nil {
+	if err := f.init(ctx, depth+1); err != nil {
 		f.Logger.Error("failed to initialize path finder", "error", err)
 		return
 	}
@@ -48,8 +51,8 @@ func (f *PathFinder) Find(ctx context.Context, ch chan Path, maxPathLength int) 
 
 func (f *PathFinder) init(ctx context.Context, maxPathLength int) (err error) {
 	f.maxPathLength.Store(int32(maxPathLength))
-	f.visitedActors = set.New[int]()
-	f.toActorMovieCredits, err = f.getActorMovieCredits(ctx, f.To.Id)
+	f.visitedActors = make(map[int]struct{})
+	f.toActorMovieCredits, f.toActorTVSeriesCredits, err = f.getActorCredits(ctx, f.To.Id)
 	return err
 }
 
@@ -57,7 +60,7 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 	logger := f.Logger.With("path", path)
 	logger.Debug("checking actor", "actor", from.Name)
 
-	fromActorMovieCredits, err := f.getActorMovieCredits(ctx, from.Id)
+	fromActorMovieCredits, fromActorTVSeriesCredits, err := f.getActorCredits(ctx, from.Id)
 	if err != nil {
 		logger.Error("failed to get actor credits", "err", err)
 		return
@@ -65,27 +68,44 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 
 	f.visit(from.Id)
 
-	commonMovieIDs := set.Intersection(fromActorMovieCredits.movieIDs, f.toActorMovieCredits.movieIDs)
-	if len(commonMovieIDs) > 0 {
-		for commonMovieID := range commonMovieIDs {
-			f.report(ch, append(path, Link{
-				Person: f.To,
-				Movie:  Movie{ID: commonMovieID, Name: f.toActorMovieCredits.movieNames[commonMovieID]},
-			}))
-		}
-		return
+	var found bool
+	for id, title := range commonActorCredits(fromActorMovieCredits, f.toActorMovieCredits) {
+		f.report(ch, append(path, Link{Movie: Movie{ID: id, Name: title}, Person: f.To}))
+		found = true
+	}
+	for id, title := range commonActorCredits(fromActorTVSeriesCredits, f.toActorTVSeriesCredits) {
+		f.report(ch, append(path, Link{Movie: Movie{ID: id, Name: title}, Person: f.To}))
+		found = true
 	}
 
-	if f.maxPathReached(path) {
+	if found || f.maxPathReached(path) {
 		return
 	}
 
 	var wg sync.WaitGroup
+	if f.Mode&ModeMovies != 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f.findActorInMovies(ctx, ch, path, fromActorMovieCredits, logger)
+		}()
+	}
+	if f.Mode&ModeTVSeries != 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f.findActorInTVSeries(ctx, ch, path, fromActorTVSeriesCredits, logger)
+		}()
+	}
+	wg.Wait()
+}
 
-	for movieID := range fromActorMovieCredits.movieIDs {
-		credits, err := f.TMDBClient.GetMovieCredits(ctx, movieID)
+func (f *PathFinder) findActorInMovies(ctx context.Context, ch chan Path, path Path, actorCredits actorCredits, logger *slog.Logger) {
+	var wg sync.WaitGroup
+	for id, title := range actorCredits {
+		credits, err := f.TMDBClient.GetMovieCredits(ctx, id)
 		if err != nil {
-			logger.Error("failed to get movie credits", "id", movieID, "err", err)
+			logger.Error("failed to get movie credits", "id", id, "err", err)
 			return
 		}
 		for _, cast := range credits.Cast {
@@ -100,8 +120,41 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 			p := tmdb.Person{Id: cast.Id, Name: cast.Name}
 			newPath := make(Path, len(path)+1)
 			copy(newPath, append(path, Link{
+				Movie:  Movie{ID: id, Name: title},
 				Person: p,
-				Movie:  Movie{ID: credits.Id, Name: fromActorMovieCredits.movieNames[credits.Id]},
+			}))
+			wg.Add(1)
+			go func() {
+				f.findActor(ctx, ch, p, newPath)
+				wg.Done()
+			}()
+		}
+	}
+	wg.Wait()
+}
+
+func (f *PathFinder) findActorInTVSeries(ctx context.Context, ch chan Path, path Path, fromActorTVSeriesCredits actorCredits, logger *slog.Logger) {
+	var wg sync.WaitGroup
+	for id, title := range fromActorTVSeriesCredits {
+		credits, err := f.TMDBClient.GetTVSeriesCredits(ctx, id)
+		if err != nil {
+			logger.Error("failed to get tv show credits", "id", id, "err", err)
+			return
+		}
+		for _, cast := range credits.Cast {
+			// other goroutines may find a shorter path concurrently
+			if f.maxPathReached(path) {
+				break
+			}
+			// don't traverse actors we've already visited
+			if f.visited(cast.Id) {
+				continue
+			}
+			p := tmdb.Person{Id: cast.Id, Name: cast.Name}
+			newPath := make(Path, len(path)+1)
+			copy(newPath, append(path, Link{
+				Movie:  Movie{ID: id, Name: title},
+				Person: p,
 			}))
 			wg.Add(1)
 			go func() {
@@ -115,7 +168,7 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 
 func (f *PathFinder) report(ch chan Path, path Path) {
 	if pathLen := len(path); pathLen < int(f.maxPathLength.Load()) {
-		f.Logger.Debug("shorter path found!", "maxPathLength", pathLen)
+		f.Logger.Info("shorter path found!", "maxPathLength", pathLen)
 		f.maxPathLength.Store(int32(pathLen))
 	}
 	ch <- path
@@ -125,31 +178,48 @@ func (f *PathFinder) maxPathReached(path Path) bool {
 	return len(path)+1 >= int(f.maxPathLength.Load())
 }
 
-func (f *PathFinder) getActorMovieCredits(ctx context.Context, id int) (actorMovieCredits, error) {
-	result := actorMovieCredits{
-		movieIDs:   set.New[int](),
-		movieNames: make(map[int]string),
-	}
-	cr, err := f.TMDBClient.GetPersonCredits(ctx, id)
-	if err == nil {
-		for _, credit := range cr.Cast {
-			if credit.MediaType == "movie" {
-				result.movieIDs.Add(credit.Id)
-				result.movieNames[credit.Id] = credit.GetTitle()
+func (f *PathFinder) getActorCredits(ctx context.Context, id int) (movies actorCredits, tvSeries actorCredits, err error) {
+	movies = make(actorCredits)
+	tvSeries = make(actorCredits)
+	var credits tmdb.PersonCredits
+	if credits, err = f.TMDBClient.GetPersonCredits(ctx, id); err == nil {
+		for _, credit := range credits.Cast {
+			if !ignoreGenre(credit) {
+				if credit.MediaType == "movie" {
+					movies.add(credit.Id, credit.GetTitle())
+				} else {
+					tvSeries.add(credit.Id, credit.GetTitle())
+				}
 			}
 		}
 	}
-	return result, err
+	return movies, tvSeries, err
 }
 
 func (f *PathFinder) visit(id int) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	f.visitedActors.Add(id)
+	f.visitedActors[id] = struct{}{}
 }
 
 func (f *PathFinder) visited(id int) bool {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
-	return f.visitedActors.Contains(id)
+	_, ok := f.visitedActors[id]
+	return ok
+}
+
+var skipList = map[int]struct{}{
+	10767: {},
+	10763: {},
+	99:    {},
+}
+
+func ignoreGenre(castCredit tmdb.CastCredit) bool {
+	for _, genre := range castCredit.GenreIds {
+		if _, ok := skipList[genre]; ok {
+			return true
+		}
+	}
+	return false
 }

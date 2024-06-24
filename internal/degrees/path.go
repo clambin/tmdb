@@ -33,6 +33,6 @@ func (p Path) String() string {
 		}
 		w.WriteString(p[i].String())
 	}
-	w.WriteString(" (" + strconv.Itoa(len(p)) + ")")
+	w.WriteString(" (" + strconv.Itoa(len(p)-1) + ")")
 	return w.String()
 }

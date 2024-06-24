@@ -13,5 +13,5 @@ func TestPath_String(t *testing.T) {
 		degrees.Link{Person: tmdb.Person{Id: 2, Name: "actor2"}, Movie: degrees.Movie{ID: 1, Name: "movie1"}},
 		degrees.Link{Person: tmdb.Person{Id: 3, Name: "actor3"}, Movie: degrees.Movie{ID: 2, Name: "movie2"}},
 	}
-	assert.Equal(t, "actor1 -> movie1 -> actor2 -> movie2 -> actor3 (3)", p.String())
+	assert.Equal(t, "actor1 -> movie1 -> actor2 -> movie2 -> actor3 (2)", p.String())
 }
