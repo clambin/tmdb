@@ -33,7 +33,6 @@ type PathFinder struct {
 }
 
 type actorMovieCredits struct {
-	id         int
 	movieIDs   set.Set[int]
 	movieNames map[int]string
 }
@@ -128,7 +127,6 @@ func (f *PathFinder) maxPathReached(path Path) bool {
 
 func (f *PathFinder) getActorMovieCredits(ctx context.Context, id int) (actorMovieCredits, error) {
 	result := actorMovieCredits{
-		id:         id,
 		movieIDs:   set.New[int](),
 		movieNames: make(map[int]string),
 	}
