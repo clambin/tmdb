@@ -63,7 +63,6 @@ func main() {
 		TMDBClient: tmdbClient,
 		From:       from,
 		To:         to,
-		IncludeTV:  false,
 		Logger:     l,
 	}
 
@@ -78,7 +77,7 @@ func getActors(c degrees.TMDBClient) (from tmdb.Person, to tmdb.Person, err erro
 	ctx := context.Background()
 	for i, arg := range flag.Args() {
 		var p tmdb.Person
-		if *id == false {
+		if !*id {
 			if p, err = degrees.FindActor(ctx, c, arg); err != nil {
 				return tmdb.Person{}, tmdb.Person{}, fmt.Errorf("invalid actor %s: %w", arg, err)
 			}

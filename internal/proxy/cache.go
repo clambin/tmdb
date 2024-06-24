@@ -18,6 +18,7 @@ type Cache struct {
 type RedisClient interface {
 	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
 	Get(ctx context.Context, key string) *redis.StringCmd
+	Ping(ctx context.Context) *redis.StatusCmd
 }
 
 func (c *Cache) Set(ctx context.Context, req *http.Request, resp *http.Response, expiration time.Duration) error {

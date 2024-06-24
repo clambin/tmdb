@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"errors"
 	"github.com/clambin/go-common/cache"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -107,10 +108,34 @@ tmdb_proxy_cache_total 4
 `)))
 }
 
+func TestTMDBProxy_Health(t *testing.T) {
+	p := New(&redis.Options{}, time.Hour, slog.Default())
+	c := fakeRedisClient{}
+	p.cache.Client = &c
+
+	r, _ := http.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	p.Health().ServeHTTP(w, r)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	c.pingErr = errors.New("ping error")
+	r, _ = http.NewRequest(http.MethodGet, "/", nil)
+	w = httptest.NewRecorder()
+	p.Health().ServeHTTP(w, r)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
 var _ RedisClient = &fakeRedisClient{}
 
 type fakeRedisClient struct {
-	cache *cache.Cache[string, string]
+	cache   *cache.Cache[string, string]
+	pingErr error
+}
+
+func (f fakeRedisClient) Ping(ctx context.Context) *redis.StatusCmd {
+	cmd := redis.NewStatusCmd(ctx)
+	cmd.SetErr(f.pingErr)
+	return cmd
 }
 
 func (f fakeRedisClient) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) *redis.StatusCmd {
