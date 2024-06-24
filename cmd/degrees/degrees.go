@@ -66,10 +66,15 @@ func main() {
 		Logger:     l,
 	}
 
-	ch := make(chan degrees.Path)
-	go pf.Find(context.Background(), ch, *depth)
-	for path := range ch {
-		fmt.Println(path.String())
+	var found bool
+	for d := 2; !found && d <= *depth; d++ {
+		l.Debug("trying depth " + strconv.Itoa(d))
+		ch := make(chan degrees.Path)
+		go pf.Find(context.Background(), ch, d)
+		for path := range ch {
+			fmt.Println(path.String())
+			found = true
+		}
 	}
 }
 
