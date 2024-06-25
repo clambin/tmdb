@@ -7,20 +7,20 @@ import (
 )
 
 type Link struct {
-	Movie
+	Entry
 	tmdb.Person
 }
 
-type Movie struct {
+type Entry struct {
 	ID   int
 	Name string
 }
 
 func (l Link) String() string {
-	if l.Movie.Name == "" {
+	if l.Entry.Name == "" {
 		return l.Person.Name
 	}
-	return l.Movie.Name + " -> " + l.Person.Name
+	return l.Entry.Name + " -> " + l.Person.Name
 }
 
 type Path []Link

@@ -3,6 +3,7 @@ package degrees_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/clambin/tmdb/internal/degrees"
 	"github.com/clambin/tmdb/internal/degrees/mocks"
 	"github.com/clambin/tmdb/pkg/tmdb"
@@ -135,6 +136,10 @@ func makePersonCredits(id int, movieIDs ...int) tmdb.PersonCredits {
 	return c
 }
 
+func makeMovie(id int) tmdb.Movie {
+	return tmdb.Movie{Id: id, Title: "movie" + strconv.Itoa(id)}
+}
+
 func makeMovieCredits(id int, actorIDs ...int) tmdb.MovieCredits {
 	c := tmdb.MovieCredits{Id: id}
 	for _, personID := range actorIDs {
@@ -146,47 +151,49 @@ func makeMovieCredits(id int, actorIDs ...int) tmdb.MovieCredits {
 	return c
 }
 
-/*
 func BenchmarkClient_Degrees(b *testing.B) {
-	ctx := context.Background()
-
-	l := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-
-	bc := newBenchClient()
+	const pathLength = 1000
+	bc := newBenchClient(pathLength)
+	b.ResetTimer()
 	for range b.N {
-		c := degrees.New(bc, l)
+		pf := degrees.PathFinder{
+			TMDBClient: bc,
+			From:       bc.person[0],
+			To:         bc.person[pathLength-1],
+			Logger:     slog.Default(),
+			Mode:       degrees.ModeMovies,
+		}
 		ch := make(chan degrees.Path)
-		go c.Degrees(ctx, ch, 1, 4, 3)
+		go pf.Find(context.Background(), ch, pathLength-1)
+		var count int
 		for range ch {
+			count++
+		}
+		if count != 1 {
+			b.Fatal("expected one path, got ", count)
 		}
 	}
 }
 
-func newBenchClient() *benchClient {
-	c := new(benchClient)
-	c.person = map[int]tmdb.Person{
-		1: makePerson(1),
-		2: makePerson(2),
-		3: makePerson(3),
-		4: makePerson(4),
+func newBenchClient(size int) *benchClient {
+	c := benchClient{
+		person:        make(map[int]tmdb.Person, size),
+		personCredits: make(map[int]tmdb.PersonCredits, size),
+		movie:         make(map[int]tmdb.Movie, size),
+		movieCredits:  make(map[int]tmdb.MovieCredits, size),
 	}
-	c.personCredits = map[int]tmdb.PersonCredits{
-		1: makePersonCredits(1, 1),
-		2: makePersonCredits(2, 1, 2),
-		3: makePersonCredits(3, 2, 3, 4),
-		4: makePersonCredits(4, 3, 4),
+
+	for i := range size {
+		c.person[i] = makePerson(i)
+		c.personCredits[i] = makePersonCredits(i, i, i+1)
+		c.movie[i] = makeMovie(i)
+		if i > 0 {
+			c.movieCredits[i] = makeMovieCredits(i, i-1, i)
+		} else {
+			c.movieCredits[i] = makeMovieCredits(i, i)
+		}
 	}
-	c.movie = map[int]tmdb.Movie{
-		3: {Id: 3, Title: "movie3"},
-		4: {Id: 4, Title: "movie4"},
-	}
-	c.movieCredits = map[int]tmdb.MovieCredits{
-		1: makeMovieCredits(1, 1, 2),
-		2: makeMovieCredits(2, 2, 3),
-		3: makeMovieCredits(3, 3, 4),
-		4: makeMovieCredits(3, 3, 4),
-	}
-	return c
+	return &c
 }
 
 var _ degrees.TMDBClient = &benchClient{}
@@ -196,6 +203,10 @@ type benchClient struct {
 	personCredits map[int]tmdb.PersonCredits
 	movie         map[int]tmdb.Movie
 	movieCredits  map[int]tmdb.MovieCredits
+}
+
+func (b benchClient) GetTVSeriesCredits(_ context.Context, _ int) (tmdb.TVSeriesCredits, error) {
+	panic("implement me")
 }
 
 func (b benchClient) SearchPersonAllPages(_ context.Context, _ string) ([]tmdb.Person, error) {
@@ -233,4 +244,3 @@ func (b benchClient) GetMovieCredits(_ context.Context, id int) (tmdb.MovieCredi
 	}
 	return tmdb.MovieCredits{}, fmt.Errorf("movieCredits not found: %d", id)
 }
-*/

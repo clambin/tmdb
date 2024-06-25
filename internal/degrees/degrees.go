@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/clambin/tmdb/pkg/tmdb"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 )
@@ -70,11 +71,11 @@ func (f *PathFinder) findActor(ctx context.Context, ch chan Path, from tmdb.Pers
 
 	var found bool
 	for id, title := range commonActorCredits(fromActorMovieCredits, f.toActorMovieCredits) {
-		f.report(ch, append(path, Link{Movie: Movie{ID: id, Name: title}, Person: f.To}))
+		f.report(ch, append(path, Link{Entry: Entry{ID: id, Name: title}, Person: f.To}))
 		found = true
 	}
 	for id, title := range commonActorCredits(fromActorTVSeriesCredits, f.toActorTVSeriesCredits) {
-		f.report(ch, append(path, Link{Movie: Movie{ID: id, Name: title}, Person: f.To}))
+		f.report(ch, append(path, Link{Entry: Entry{ID: id, Name: title}, Person: f.To}))
 		found = true
 	}
 
@@ -117,17 +118,11 @@ func (f *PathFinder) findActorInMovies(ctx context.Context, ch chan Path, path P
 			if f.visited(cast.Id) {
 				continue
 			}
-			p := tmdb.Person{Id: cast.Id, Name: cast.Name}
-			newPath := make(Path, len(path)+1)
-			copy(newPath, append(path, Link{
-				Movie:  Movie{ID: id, Name: title},
-				Person: p,
-			}))
 			wg.Add(1)
-			go func() {
-				f.findActor(ctx, ch, p, newPath)
+			go func(p tmdb.Person, e Entry) {
+				f.findActor(ctx, ch, p, slices.Concat(path, Path{Link{Person: p, Entry: e}}))
 				wg.Done()
-			}()
+			}(tmdb.Person{Id: cast.Id, Name: cast.Name}, Entry{ID: id, Name: title})
 		}
 	}
 	wg.Wait()
@@ -150,17 +145,11 @@ func (f *PathFinder) findActorInTVSeries(ctx context.Context, ch chan Path, path
 			if f.visited(cast.Id) {
 				continue
 			}
-			p := tmdb.Person{Id: cast.Id, Name: cast.Name}
-			newPath := make(Path, len(path)+1)
-			copy(newPath, append(path, Link{
-				Movie:  Movie{ID: id, Name: title},
-				Person: p,
-			}))
 			wg.Add(1)
-			go func() {
-				f.findActor(ctx, ch, p, newPath)
+			go func(p tmdb.Person, e Entry) {
+				f.findActor(ctx, ch, p, slices.Concat(path, Path{Link{Person: p, Entry: e}}))
 				wg.Done()
-			}()
+			}(tmdb.Person{Id: cast.Id, Name: cast.Name}, Entry{ID: id, Name: title})
 		}
 	}
 	wg.Wait()

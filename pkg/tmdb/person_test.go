@@ -24,9 +24,9 @@ func TestCastCredit_GetTitle(t *testing.T) {
 			name: "movie",
 			fields: fields{
 				mediaType: "movie",
-				title:     "Movie",
+				title:     "Entry",
 			},
-			want: "Movie",
+			want: "Entry",
 		},
 		{
 			name: "tv show",
