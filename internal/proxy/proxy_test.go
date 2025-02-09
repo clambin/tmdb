@@ -5,19 +5,22 @@ import (
 	"context"
 	"errors"
 	"github.com/clambin/go-common/cache"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/clambin/go-common/httputils/roundtripper"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestTMDBProxy_ServeHTTP(t *testing.T) {
+var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+func TestProxyHandler(t *testing.T) {
 	tests := []struct {
 		name           string
 		path           string
@@ -56,74 +59,68 @@ func TestTMDBProxy_ServeHTTP(t *testing.T) {
 				}
 				w.WriteHeader(http.StatusOK)
 			}))
-			defer s.Close()
+			t.Cleanup(s.Close)
 
-			p := New(&redis.Options{}, time.Hour, slog.Default())
-			p.TargetHost = s.URL
-			p.cache.Client = &fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}
+			redisClient := fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}
+			h := TMDBProxyHandler(s.URL, &redisClient, time.Minute, nil, discardLogger)
 
 			var w httptest.ResponseRecorder
 			r, _ := http.NewRequest(http.MethodGet, "http://localhost"+tt.path, nil)
-			p.ServeHTTP(&w, r)
+			h.ServeHTTP(&w, r)
 			assert.Equal(t, tt.wantStatusCode, w.Code)
 		})
 	}
 }
 
-func TestTMDBProxy_Collect(t *testing.T) {
-	var count atomic.Int32
-	s := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		count.Add(1)
+func TestTMDBProxyHandler_Metrics(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("a", 1024)))
 	}))
+	t.Cleanup(s.Close)
 
-	p := New(&redis.Options{}, time.Hour, slog.Default())
-	p.TargetHost = s.URL
-	p.cache.Client = &fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}
+	cacheMetrics := roundtripper.NewCacheMetrics(roundtripper.CacheMetricsOptions{GetPath: func(r *http.Request) string {
+		return "/"
+	}})
 
-	reg := prometheus.NewPedanticRegistry()
-	reg.MustRegister(p)
+	h := TMDBProxyHandler(s.URL, &fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}, time.Minute, cacheMetrics, discardLogger)
+	r, err := http.NewRequest(http.MethodGet, "/foo", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, w.Code)
 
-	for range 3 {
-		var w httptest.ResponseRecorder
-		r, _ := http.NewRequest(http.MethodGet, "/foo", nil)
-		p.ServeHTTP(&w, r)
-		assert.Equal(t, http.StatusOK, w.Code)
-	}
-	assert.Equal(t, int32(1), count.Load())
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, err)
 
-	s.Close()
-	var w httptest.ResponseRecorder
-	r, _ := http.NewRequest(http.MethodGet, "/bar", nil)
-	p.ServeHTTP(&w, r)
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.NoError(t, testutil.CollectAndCompare(cacheMetrics, bytes.NewBufferString(`
+# HELP http_cache_hit_total Number of times the cache was used
+# TYPE http_cache_hit_total counter
+http_cache_hit_total{method="GET",path="/"} 1
 
-	assert.NoError(t, testutil.GatherAndCompare(reg, bytes.NewBufferString(`
-# HELP tmdb_proxy_cache_hit_count Number of times the cache was used
-# TYPE tmdb_proxy_cache_hit_count counter
-tmdb_proxy_cache_hit_count 2
-
-# HELP tmdb_proxy_cache_total_count Number of times the cache was tried
-# TYPE tmdb_proxy_cache_total_count counter
-tmdb_proxy_cache_total_count 4
+# HELP http_cache_total Number of times the cache was consulted
+# TYPE http_cache_total counter
+http_cache_total{method="GET",path="/"} 2
 `)))
 }
 
-func TestTMDBProxy_Health(t *testing.T) {
-	p := New(&redis.Options{}, time.Hour, slog.Default())
-	c := fakeRedisClient{}
-	p.cache.Client = &c
+func TestHealthHandler(t *testing.T) {
+	var redisClient fakeRedisClient
+	h := HealthHandler(&redisClient, discardLogger)
 
-	r, _ := http.NewRequest(http.MethodGet, "/", nil)
+	r, _ := http.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
-	p.Health().ServeHTTP(w, r)
+	h.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	c.pingErr = errors.New("ping error")
-	r, _ = http.NewRequest(http.MethodGet, "/", nil)
+	redisClient.pingErr = errors.New("ping error")
 	w = httptest.NewRecorder()
-	p.Health().ServeHTTP(w, r)
+	h.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 var _ RedisClient = &fakeRedisClient{}
 

@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.22 as builder
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.23 AS builder
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
@@ -8,7 +8,7 @@ ARG VERSION
 ENV VERSION=$VERSION
 
 WORKDIR /app/
-ADD . .
+ADD build .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build \
     -ldflags="-X main.version=$VERSION" \
