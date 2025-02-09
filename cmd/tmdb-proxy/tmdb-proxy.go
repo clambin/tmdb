@@ -4,7 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/clambin/go-common/http/middleware"
+	"github.com/clambin/go-common/httputils/middleware"
 	"github.com/clambin/tmdb/internal/proxy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"

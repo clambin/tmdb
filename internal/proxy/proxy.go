@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"errors"
-	"github.com/clambin/go-common/http/roundtripper"
+	"github.com/clambin/go-common/httputils/roundtripper"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"io"

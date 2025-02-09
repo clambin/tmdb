@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/clambin/go-common/http/roundtripper"
+	"github.com/clambin/go-common/httputils/roundtripper"
 	"github.com/clambin/tmdb/internal/degrees"
 	"github.com/clambin/tmdb/pkg/tmdb"
 	"log/slog"

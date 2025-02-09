@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"github.com/clambin/go-common/http/roundtripper"
+	"github.com/clambin/go-common/httputils/roundtripper"
 	"github.com/prometheus/client_golang/prometheus"
 	"net/http"
 )
