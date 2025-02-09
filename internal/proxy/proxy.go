@@ -18,7 +18,7 @@ func TMDBProxyHandler(target string, redisClient RedisClient, ttl time.Duration,
 	tp.MaxConnsPerHost = 100
 
 	client := tmdbClient{
-		TargetHost: cmp.Or(target, "https://api.themoviedb.org", target),
+		TargetHost: cmp.Or(target, "https://api.themoviedb.org"),
 		httpClient: &http.Client{
 			Transport: tp,
 			Timeout:   time.Second * 10,
