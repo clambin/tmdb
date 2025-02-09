@@ -65,7 +65,7 @@ func main() {
 	g.Go(func() error {
 		m := http.NewServeMux()
 		m.Handle("/readyz", p.Health())
-		healthServer := http.Server{Addr: *healthAddr, Handler: requestLogger(m)}
+		healthServer := http.Server{Addr: *healthAddr, Handler: m}
 		if err := healthServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("health server error: %w", err)
 		}
