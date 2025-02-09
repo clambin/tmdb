@@ -12,10 +12,6 @@ import (
 )
 
 func TMDBProxyHandler(target string, redisClient RedisClient, ttl time.Duration, cacheMetrics roundtripper.CacheMetrics, logger *slog.Logger) http.Handler {
-	cache := Cache{
-		Namespace: "github.com/clambin/tmdb",
-		Client:    redisClient,
-	}
 	tp := http.DefaultTransport.(*http.Transport).Clone()
 	tp.MaxIdleConns = 100
 	tp.MaxIdleConnsPerHost = 100
@@ -29,23 +25,23 @@ func TMDBProxyHandler(target string, redisClient RedisClient, ttl time.Duration,
 		},
 	}
 
+	responses := responseCache{
+		Namespace: "github.com/clambin/tmdb",
+		Client:    redisClient,
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var resp *http.Response
-		var err error
 		var fetched bool
-		if resp, err = cache.Get(r.Context(), r); err != nil {
-			fetched = true
+		resp, err := responses.Get(r.Context(), r)
+		if err != nil {
 			if !errors.Is(err, redis.Nil) {
 				logger.Warn("failed to get cached response", "error", err)
 			}
 
 			if resp, err = client.call(r); err == nil && resp.StatusCode == http.StatusOK {
-				err = cache.Set(r.Context(), r, resp, ttl)
+				fetched = true
+				err = responses.Set(r.Context(), r, resp, ttl)
 			}
-		}
-
-		if cacheMetrics != nil {
-			cacheMetrics.Measure(r, !fetched)
 		}
 
 		if err != nil {
@@ -53,8 +49,11 @@ func TMDBProxyHandler(target string, redisClient RedisClient, ttl time.Duration,
 			return
 		}
 
+		if cacheMetrics != nil {
+			cacheMetrics.Measure(r, !fetched)
+		}
+
 		w.WriteHeader(resp.StatusCode)
-		// TODO: set Content Encoding to "identity", i.e. no compression?
 		copyHeader(w.Header(), resp.Header)
 		_, _ = io.Copy(w, resp.Body)
 		_ = resp.Body.Close()
@@ -73,8 +72,7 @@ func (p tmdbClient) call(r *http.Request) (*http.Response, error) {
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), r.Method, target, nil)
 	copyHeader(req.Header, r.Header)
-	// TODO: this prevents compression
-	// for some reason http.ReadResponse returns the compressed body, and then the end client can't read the body.
+	// ask for non-compressed responses so we have a clear text copy in our cache
 	req.Header.Set("Accept-Encoding", "identity")
 
 	return p.httpClient.Do(req)

@@ -74,7 +74,8 @@ func TestProxyHandler(t *testing.T) {
 
 func TestTMDBProxyHandler_Metrics(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(strings.Repeat("a", 1024)))
+		w.WriteHeader(http.StatusOK)
+		//_, _ = w.Write([]byte(strings.Repeat("a", 1024)))
 	}))
 	t.Cleanup(s.Close)
 
@@ -103,6 +104,24 @@ http_cache_hit_total{method="GET",path="/"} 1
 # TYPE http_cache_total counter
 http_cache_total{method="GET",path="/"} 2
 `)))
+}
+
+func TestTMDBProxyHandler_Integrity(t *testing.T) {
+	body := strings.Repeat("a", 1024*1024)
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "origin")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(s.Close)
+
+	h := TMDBProxyHandler(s.URL, &fakeRedisClient{cache: cache.New[string, string](time.Hour, time.Hour)}, time.Minute, nil, discardLogger)
+	r, err := http.NewRequest(http.MethodGet, "/foo", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, body, w.Body.String())
+	t.Log(w.Header())
 }
 
 func TestHealthHandler(t *testing.T) {

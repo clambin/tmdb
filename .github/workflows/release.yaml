@@ -1,10 +1,11 @@
 name: release
-
 on:
   push:
     tags:
       - 'v*'
-
+permissions:
+  contents: write
+  packages: write
 jobs:
   test:
     uses: clambin/workflows/.github/workflows/test.yaml@main
@@ -16,6 +17,7 @@ jobs:
     uses: clambin/workflows/.github/workflows/build.yaml@main
     with:
       image: ghcr.io/clambin/tmdb-proxy
+      dockerfile: Dockerfile
   release:
     needs:
       - build
