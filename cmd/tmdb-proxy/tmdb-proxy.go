@@ -1,10 +1,11 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"flag"
-	"fmt"
+	"github.com/clambin/go-common/httputils"
 	"github.com/clambin/go-common/httputils/middleware"
+	"github.com/clambin/go-common/httputils/roundtripper"
 	"github.com/clambin/tmdb/internal/proxy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -13,6 +14,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -38,45 +41,51 @@ func main() {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &opts))
 
-	o := redis.Options{
-		Addr:     *redisAddr,
-		DB:       *redisDB,
-		Username: *redisUsername,
-		Password: *redisPassword,
-	}
-
 	logger.Info("Starting proxy",
 		"version", version,
 		slog.Group("redis", "addr", *redisAddr, "db", *redisDB),
 	)
 
-	p := proxy.New(&o, *cacheExpiry, logger)
-	prometheus.MustRegister(p)
+	cacheMetrics := roundtripper.NewCacheMetrics(roundtripper.CacheMetricsOptions{
+		Namespace:   "tmdb",
+		Subsystem:   "proxy",
+		ConstLabels: nil,
+		GetPath:     func(r *http.Request) string { return "/" },
+	})
+	prometheus.MustRegister(cacheMetrics)
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     *redisAddr,
+		DB:       *redisDB,
+		Username: *redisUsername,
+		Password: *redisPassword,
+	})
+
 	requestLogger := middleware.RequestLogger(logger, slog.LevelDebug, middleware.DefaultRequestLogFormatter)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	var g errgroup.Group
 	g.Go(func() error {
-		http.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(*prometheusAddr, nil); !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("prometheus server error: %w", err)
-		}
-		return nil
+		return httputils.RunServer(ctx, &http.Server{
+			Addr:    *prometheusAddr,
+			Handler: promhttp.Handler(),
+		})
 	})
 	g.Go(func() error {
-		m := http.NewServeMux()
-		m.Handle("/readyz", p.Health())
-		healthServer := http.Server{Addr: *healthAddr, Handler: m}
-		if err := healthServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("health server error: %w", err)
-		}
-		return nil
+		return httputils.RunServer(ctx, &http.Server{
+			Addr:    *healthAddr,
+			Handler: proxy.HealthHandler(redisClient, logger.With("handler", "health")),
+		})
 	})
 	g.Go(func() error {
-		s := http.Server{Addr: *proxyAddr, Handler: requestLogger(p)}
-		if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("proxy server error: %w", err)
-		}
-		return nil
+		return httputils.RunServer(ctx, &http.Server{
+			Addr: *proxyAddr,
+			Handler: requestLogger(
+				proxy.TMDBProxyHandler("", redisClient, *cacheExpiry, cacheMetrics, logger.With("handler", "proxy")),
+			),
+		})
 	})
 
 	if err := g.Wait(); err != nil {

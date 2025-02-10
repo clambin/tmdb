@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-type Cache struct {
+type responseCache struct {
 	Namespace string
 	Client    RedisClient
 }
@@ -21,7 +21,7 @@ type RedisClient interface {
 	Ping(ctx context.Context) *redis.StatusCmd
 }
 
-func (c *Cache) Set(ctx context.Context, req *http.Request, resp *http.Response, expiration time.Duration) error {
+func (c *responseCache) Set(ctx context.Context, req *http.Request, resp *http.Response, expiration time.Duration) error {
 	buf, err := httputil.DumpResponse(resp, true)
 	if err == nil {
 		err = c.Client.Set(ctx, c.getKey(req), string(buf), expiration).Err()
@@ -29,7 +29,7 @@ func (c *Cache) Set(ctx context.Context, req *http.Request, resp *http.Response,
 	return err
 }
 
-func (c *Cache) Get(ctx context.Context, req *http.Request) (*http.Response, error) {
+func (c *responseCache) Get(ctx context.Context, req *http.Request) (*http.Response, error) {
 	body, err := c.Client.Get(ctx, c.getKey(req)).Result()
 	if err != nil {
 		return nil, err
@@ -38,6 +38,6 @@ func (c *Cache) Get(ctx context.Context, req *http.Request) (*http.Response, err
 	return http.ReadResponse(r, req)
 }
 
-func (c *Cache) getKey(r *http.Request) string {
+func (c *responseCache) getKey(r *http.Request) string {
 	return c.Namespace + "|" + r.Method + "|" + r.URL.String()
 }
