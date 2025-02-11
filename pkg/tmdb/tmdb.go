@@ -51,7 +51,7 @@ type auth struct {
 }
 
 func (a auth) RoundTrip(r *http.Request) (*http.Response, error) {
-	r.Header.Add("Authorization", "Bearer "+a.authKey)
+	r.Header.Set("Authorization", "Bearer "+a.authKey)
 	return a.next.RoundTrip(r)
 }
 

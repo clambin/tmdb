@@ -35,17 +35,25 @@ func TMDBProxyHandler(target string, redisClient RedisClient, ttl time.Duration,
 		resp, err := responses.Get(r.Context(), r)
 		if err != nil {
 			if !errors.Is(err, redis.Nil) {
-				logger.Warn("failed to get cached response", "error", err)
+				logger.Warn("failed to get cached response", "err", err)
 			}
 
-			if resp, err = client.call(r); err == nil && resp.StatusCode == http.StatusOK {
+			logger.Debug("cache miss")
+
+			resp, err = client.call(r)
+			logger.Debug("tmdb called", "err", err)
+
+			if err == nil && resp.StatusCode == http.StatusOK {
 				fetched = true
 				err = responses.Set(r.Context(), r, resp, ttl)
+
+				logger.Debug("stored in cache", "err", err)
 			}
 		}
 
 		if err != nil {
-			http.Error(w, "failed to get request", http.StatusBadGateway)
+			logger.Warn("failed to process request", "err", err)
+			http.Error(w, "failed to process request", http.StatusBadGateway)
 			return
 		}
 
@@ -88,11 +96,11 @@ func copyHeader(dst, src http.Header) {
 
 func HealthHandler(client RedisClient, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		statusCode := http.StatusOK
 		if err := client.Ping(r.Context()).Err(); err != nil {
 			logger.Warn("failed to ping cache", "err", err)
-			http.Error(w, "failed to ping cache", http.StatusServiceUnavailable)
-			return
+			statusCode = http.StatusServiceUnavailable
 		}
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(statusCode)
 	})
 }
