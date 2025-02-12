@@ -1,11 +1,10 @@
 module github.com/clambin/tmdb
 
 go 1.22.4
-
-toolchain go1.23.6
+toolchain go1.24.0
 
 require (
-	github.com/clambin/go-common/cache v0.7.1
+	github.com/clambin/go-common/cache v0.8.0
 	github.com/clambin/go-common/httputils v0.1.2
 	github.com/clambin/go-common/set v0.4.3
 	github.com/prometheus/client_golang v1.20.5
